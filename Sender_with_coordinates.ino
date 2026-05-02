@@ -3,8 +3,6 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h> // Required for channel locking
-
-// --- HARDWARE CONFIGURATION ---
 #define DisplaySerial Serial1 
 Goldelox_Serial_4DLib Display(&DisplaySerial);
 
@@ -18,56 +16,40 @@ Goldelox_Serial_4DLib Display(&DisplaySerial);
 #define DOWN_PIN   23
 #define RIGHT_PIN  15
 
-// --- ESP-NOW CONFIGURATION ---
 uint8_t carAddress[] = {0xA0, 0x85, 0xE3, 0xDA, 0xBE, 0x68}; 
 
-// --- DATA STRUCTURES ---
 struct Point {
   int16_t x;
   int16_t y;
 };
-
 struct PathPacket {
   int packetId;      
   int count;         
   Point points[50];  
 };
-
-// NEW: Struct for data coming back FROM the car
 struct Telemetry {
   int step;
   float turn;
   float dist;
 };
-
 Point path[200]; 
 int pathIndex = 0;
-
-// --- DRAWING STATE ---
 int curX = 64, curY = 64, prevX = 64, prevY = 64;
 int moveSpeed = 2; 
 
-// Callback for Sending (Already in your code)
 void OnDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
   Serial.print("\r\nPacket Status: ");
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
-
-// NEW: Callback for Receiving Telemetry from the Car
 void OnTelemetryRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
   if (len == sizeof(Telemetry)) {
     Telemetry* report = (Telemetry*)data;
     Serial.printf("\n[CAR TELEMETRY] Step: %d | Turn: %.1f deg | Dist: %.1f units\n", 
                   report->step, report->turn, report->dist);
-    
-    // Optional: You could update the uLCD here to show car progress
   }
 }
-
 void setup() {
-  Serial.begin(115200);
-  
-  // 1. ESP-NOW Initialization 
+  Serial.begin(115200); 
   WiFi.mode(WIFI_STA);
   esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE); // Ensure channel is 1
 
@@ -87,20 +69,15 @@ void setup() {
     Serial.println("Failed to add peer");
     return;
   }
-
-  // 2. Pin Setup 
   pinMode(UP_PIN, INPUT_PULLUP);
   pinMode(CENTER_PIN, INPUT_PULLUP); 
   pinMode(LEFT_PIN, INPUT_PULLUP);
   pinMode(DOWN_PIN, INPUT_PULLUP);
   pinMode(RIGHT_PIN, INPUT_PULLUP);
-
-  // 3. Hardware Reset Display
   pinMode(RESET_PIN, OUTPUT);
   digitalWrite(RESET_PIN, LOW); delay(200);
   digitalWrite(RESET_PIN, HIGH); delay(3000); 
 
-  // 4. Display Setup
   DisplaySerial.begin(9600, SERIAL_8N1, TX_PIN, RX_PIN);
   Display.gfx_Cls();
   
@@ -110,8 +87,6 @@ void setup() {
 void loop() {
   prevX = curX;
   prevY = curY;
-
-  // Handle Movement
   if (!digitalRead(UP_PIN))    curY -= moveSpeed;
   if (!digitalRead(DOWN_PIN))  curY += moveSpeed;
   if (!digitalRead(LEFT_PIN))  curX -= moveSpeed;
@@ -119,8 +94,6 @@ void loop() {
 
   curX = constrain(curX, 0, 127);
   curY = constrain(curY, 0, 127);
-
-  // Draw and Record
   if (prevX != curX || prevY != curY) {
     Display.gfx_Line(prevX, prevY, curX, curY, 0xCE60); 
     if (pathIndex < 200) {
@@ -128,8 +101,6 @@ void loop() {
       pathIndex++;
     }
   }
-
-  // --- TRANSMIT PATH ---
   if (!digitalRead(CENTER_PIN)) {
     if (pathIndex > 0) {
       Serial.println("\n===========================================");
